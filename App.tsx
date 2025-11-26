@@ -33,6 +33,7 @@ import SecurityModal from './components/SecurityModal';
 import PaymentQRModal from './components/PaymentQRModal';
 import Sidebar from './components/Sidebar';
 import { SmartDevice, DeviceType, ConnectionStatus, Scene, Automation, DigitalKey, KeyType } from './types';
+import { getEnv } from './utils/env';
 
 // Mock Data Generators
 const generateHistoryData = () => {
@@ -219,6 +220,7 @@ const App: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [energyData, setEnergyData] = useState(generateHistoryData());
   const [activeTab, setActiveTab] = useState('home');
+  const [env, setEnv] = useState<ReturnType<typeof getEnv>>({ isWeChat: false, isAlipay: false, isMiniProgram: false, platform: 'web' });
 
   // Security & Payment State
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
@@ -226,6 +228,11 @@ const App: React.FC = () => {
   const [selectedPaymentKey, setSelectedPaymentKey] = useState<DigitalKey | null>(null);
 
   useEffect(() => {
+    // 1. Environment Detection
+    const currentEnv = getEnv();
+    setEnv(currentEnv);
+    
+    // 2. Data Simulation
     const interval = setInterval(() => {
       setDevices(prev => prev.map(d => {
         if (d.status !== ConnectionStatus.ONLINE) return d;
@@ -325,7 +332,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark-950 text-slate-200 font-sans pb-24 md:pb-0 md:pl-72 relative overflow-x-hidden selection:bg-brand-500/30">
+    <div className={`min-h-screen bg-dark-950 text-slate-200 font-sans pb-24 md:pb-0 md:pl-72 relative overflow-x-hidden selection:bg-brand-500/30 ${env.isMiniProgram ? 'pt-2' : ''}`}>
       
       {/* Background Effects */}
       <div className="fixed inset-0 bg-grid z-0 pointer-events-none opacity-40"></div>
@@ -342,6 +349,7 @@ const App: React.FC = () => {
         <header className="md:hidden flex justify-between items-center mb-8">
           <div>
             <h1 className="text-xl font-bold text-white tracking-wide">SMART<span className="text-brand-400">HOME</span></h1>
+            {env.isMiniProgram && <span className="text-[9px] text-slate-500 font-mono uppercase">via {env.platform} MP</span>}
           </div>
           <div className="flex gap-3">
             <button onClick={() => setIsScannerOpen(true)} className="p-2.5 bg-brand-600/20 border border-brand-500/30 rounded-full text-brand-400 backdrop-blur-md">
@@ -416,7 +424,7 @@ const App: React.FC = () => {
               <div className="space-y-6">
                 
                 {/* Chart Card */}
-                <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+                <div className="glass-panel p-6 rounded-2xl border border-slate-800" style={{ minWidth: 0 }}>
                    <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2">
                      <Zap className="w-4 h-4 text-brand-400" />
                      POWER CONSUMPTION

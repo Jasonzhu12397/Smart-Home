@@ -107,3 +107,12 @@ export interface SystemLog {
   message: string;
   timestamp: string;
 }
+
+// Global Definitions for Mini Programs
+declare global {
+  interface Window {
+    wx: any;
+    my: any;
+    AlipayJSBridge: any;
+  }
+}
