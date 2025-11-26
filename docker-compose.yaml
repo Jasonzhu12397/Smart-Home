@@ -1,0 +1,42 @@
+
+version: '3.8'
+
+services:
+  # The Main App Interface (Web/PWA)
+  smart-home-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-home-edge-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - mqtt-broker
+    environment:
+      # In a real build, this would be injected at build time or handled via a config.js loaded at runtime
+      - REACT_APP_MQTT_URL=ws://localhost:9001
+    networks:
+      - smart-home-edge-net
+
+  # MQTT Broker (The "Nerve Center" for IoT devices)
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: smart-home-mqtt
+    ports:
+      - "1883:1883" # TCP Port for Physical Devices (Zigbee bridge, ESP32, etc.)
+      - "9001:9001" # Websocket Port for the Web App
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - smart-home-edge-net
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+
+networks:
+  smart-home-edge-net:
+    driver: bridge

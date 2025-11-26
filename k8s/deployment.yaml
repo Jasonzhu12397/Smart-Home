@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smart-home-server
+  labels:
+    app: smart-home
+    component: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: smart-home
+      component: server
+  template:
+    metadata:
+      labels:
+        app: smart-home
+        component: server
+    spec:
+      containers:
+      - name: server
+        # This image is assumed to contain both the Go/Python backend AND the React build output in /public
+        # The server is configured to serve index.html for non-API routes (SPA fallback)
+        image: smart-home-server:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 1883
+          name: mqtt
+        env:
+        - name: KUBEEDGE_CLOUDCORE_URL
+          value: "ws://cloudcore.kubeedge.svc.cluster.local:10000"
+        - name: SERVE_STATIC_FILES
+          value: "true"
+        - name: STATIC_FILES_PATH
+          value: "/app/client/dist"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: smart-home-secrets
+              key: database-url
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20

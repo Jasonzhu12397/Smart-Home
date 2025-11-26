@@ -1,0 +1,8 @@
+{
+  "name": "Smart Home",
+  "description": "Next-gen Smart Home Manager backed by KubeEdge. Monitor IoT devices, scan to register nodes, and optimize energy with Gemini AI.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
