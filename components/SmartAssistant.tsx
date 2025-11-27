@@ -1,11 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, X, Bot, Mic, MicOff, ChevronDown, Activity, Settings, Save } from 'lucide-react';
-import { ChatMessage, SmartDevice, AIProvider } from '../types';
+import { Send, Sparkles, X, Bot, Mic, MicOff, ChevronDown, Activity, Settings, Save, Cpu } from 'lucide-react';
+import { ChatMessage, SmartDevice, AIProvider, SmartRobot } from '../types';
 import { getSmartHomeResponse } from '../services/aiService';
 
 interface SmartAssistantProps {
   devices: SmartDevice[];
+  robots?: SmartRobot[];
+  onUpdateDevice?: (id: string, updates: Partial<SmartDevice>) => void;
+  onUpdateRobot?: (updates: Partial<SmartRobot>) => void;
 }
 
 // Web Speech API Type Definition for TypeScript
@@ -16,7 +19,7 @@ declare global {
   }
 }
 
-const SmartAssistant: React.FC<SmartAssistantProps> = ({ devices }) => {
+const SmartAssistant: React.FC<SmartAssistantProps> = ({ devices, robots = [], onUpdateDevice, onUpdateRobot }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -92,7 +95,14 @@ const SmartAssistant: React.FC<SmartAssistantProps> = ({ devices }) => {
     setInput('');
     setLoading(true);
 
-    const responseText = await getSmartHomeResponse(provider, devices, textToSend, aiName);
+    const dispatch = {
+        updateDevice: onUpdateDevice || (() => {}),
+        updateRobot: (id: string, updates: Partial<SmartRobot>) => {
+            if (onUpdateRobot) onUpdateRobot(updates);
+        }
+    };
+
+    const responseText = await getSmartHomeResponse(provider, devices, textToSend, aiName, robots, dispatch);
 
     const aiMsg: ChatMessage = {
       id: (Date.now() + 1).toString(),
@@ -171,27 +181,34 @@ const SmartAssistant: React.FC<SmartAssistantProps> = ({ devices }) => {
                     className="flex items-center gap-1.5 text-white font-bold text-sm tracking-wide hover:bg-white/5 px-2 py-1 rounded transition-colors"
                 >
                     {provider === 'GEMINI' && 'GEMINI CORE'}
+                    {provider === 'OPENAI' && 'CHATGPT-4o'}
                     {provider === 'DEEPSEEK' && 'DEEPSEEK V3'}
                     {provider === 'QWEN' && 'ALIYUN QWEN'}
                     {provider === 'DOUBAO' && 'DOUBAO AI'}
+                    {provider === 'RBOT' && 'R-BOT AGENT'}
                     <ChevronDown className="w-3 h-3 text-slate-500" />
                 </button>
                 
                 {/* Dropdown */}
                 {showModelMenu && (
-                    <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-100 z-50">
                         {[
                             { id: 'GEMINI', label: 'Gemini 2.5 (US)' },
+                            { id: 'OPENAI', label: 'ChatGPT-4o (US)' },
                             { id: 'DEEPSEEK', label: 'DeepSeek (CN)' },
                             { id: 'QWEN', label: 'Qwen Max (CN)' },
-                            { id: 'DOUBAO', label: 'Doubao (CN)' }
+                            { id: 'DOUBAO', label: 'Doubao (CN)' },
+                            { id: 'RBOT', label: 'R-Bot (Physical)' },
                         ].map((m) => (
                             <button
                                 key={m.id}
                                 onClick={() => { setProvider(m.id as AIProvider); setShowModelMenu(false); }}
                                 className={`w-full text-left px-4 py-3 text-xs font-mono hover:bg-slate-800 transition-colors flex items-center justify-between ${provider === m.id ? 'text-brand-400 bg-brand-900/10' : 'text-slate-300'}`}
                             >
-                                {m.label}
+                                <span className="flex items-center gap-2">
+                                   {m.id === 'RBOT' && <Cpu className="w-3 h-3" />}
+                                   {m.label}
+                                </span>
                                 {provider === m.id && <div className="w-1.5 h-1.5 rounded-full bg-brand-400"></div>}
                             </button>
                         ))}

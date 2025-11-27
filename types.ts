@@ -4,7 +4,8 @@ export enum DeviceType {
   THERMOSTAT = 'THERMOSTAT',
   CAMERA = 'CAMERA',
   SENSOR = 'SENSOR',
-  SPEAKER = 'SPEAKER'
+  SPEAKER = 'SPEAKER',
+  CURTAIN = 'CURTAIN'
 }
 
 export enum ConnectionStatus {
@@ -32,7 +33,7 @@ export interface SystemMetrics {
   edgeNodeHealth: 'Healthy' | 'Warning' | 'Critical';
 }
 
-export type AIProvider = 'GEMINI' | 'DEEPSEEK' | 'QWEN' | 'DOUBAO' | 'LOCAL';
+export type AIProvider = 'GEMINI' | 'OPENAI' | 'DEEPSEEK' | 'QWEN' | 'DOUBAO' | 'RBOT' | 'LOCAL';
 
 export interface ChatMessage {
   id: string;

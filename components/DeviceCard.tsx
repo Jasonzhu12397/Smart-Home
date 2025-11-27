@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lightbulb, Thermometer, Video, Activity, Speaker, Power, RefreshCw, Zap } from 'lucide-react';
+import { Lightbulb, Thermometer, Video, Activity, Speaker, Power, RefreshCw, Zap, Blinds } from 'lucide-react';
 import { SmartDevice, DeviceType, ConnectionStatus } from '../types';
 
 interface DeviceCardProps {
@@ -17,6 +17,7 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onToggle }) => {
       case DeviceType.THERMOSTAT: return <Thermometer className={`w-5 h-5 ${isActive ? 'text-rose-400' : 'text-slate-400'}`} />;
       case DeviceType.CAMERA: return <Video className={`w-5 h-5 ${isActive ? 'text-brand-400' : 'text-slate-400'}`} />;
       case DeviceType.SPEAKER: return <Speaker className={`w-5 h-5 ${isActive ? 'text-accent-400' : 'text-slate-400'}`} />;
+      case DeviceType.CURTAIN: return <Blinds className={`w-5 h-5 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />;
       default: return <Activity className={`w-5 h-5 ${isActive ? 'text-brand-400' : 'text-slate-400'}`} />;
     }
   };
@@ -74,7 +75,7 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onToggle }) => {
              </span>
            ) : (
              <span className="text-xs text-slate-500 font-medium">
-               {isOnline ? (isActive ? 'Active' : 'Standby') : 'Offline'}
+               {isOnline ? (isActive ? (device.type === DeviceType.CURTAIN ? 'Open' : 'Active') : (device.type === DeviceType.CURTAIN ? 'Closed' : 'Standby')) : 'Offline'}
              </span>
            )}
         </div>

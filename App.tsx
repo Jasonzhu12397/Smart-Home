@@ -114,6 +114,15 @@ const initialDevices: SmartDevice[] = [
     status: ConnectionStatus.ONLINE,
     isOn: true,
     energyUsageWatts: 9
+  },
+  {
+    id: '8',
+    name: 'LR Curtains',
+    type: DeviceType.CURTAIN,
+    location: 'Living Room',
+    status: ConnectionStatus.ONLINE,
+    isOn: false, // Closed
+    energyUsageWatts: 0
   }
 ];
 
@@ -284,6 +293,10 @@ const App: React.FC = () => {
     setDevices(prev => prev.map(d => d.id === id ? { ...d, isOn: !d.isOn } : d));
   };
 
+  const handleUpdateDevice = (id: string, updates: Partial<SmartDevice>) => {
+    setDevices(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
   const handleTriggerScene = (scene: Scene) => {
     setDevices(prev => prev.map(device => {
       const action = scene.actions.find(a => a.deviceId === device.id);
@@ -341,6 +354,7 @@ const App: React.FC = () => {
   };
 
   const handleRobotUpdate = (updates: Partial<SmartRobot>) => {
+      // In a real app we would use ID, but here we assume single R-Bot
       setRobots(prev => prev.map(r => r.id === 'r1' ? { ...r, ...updates } : r));
   };
 
@@ -577,7 +591,12 @@ const App: React.FC = () => {
       />
 
       {/* New AI Assistant with Voice and Robot Support */}
-      <SmartAssistant devices={devices} />
+      <SmartAssistant 
+        devices={devices} 
+        robots={robots}
+        onUpdateDevice={handleUpdateDevice}
+        onUpdateRobot={handleRobotUpdate}
+      />
 
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#020617]/90 backdrop-blur-xl border-t border-slate-800 z-50 pb-safe">

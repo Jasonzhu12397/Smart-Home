@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { SmartDevice, DeviceType, AIProvider, SmartRobot, RobotMode } from "../types";
+import { SmartDevice, DeviceType, AIProvider, SmartRobot, RobotMode, RobotStatus } from "../types";
 
 const apiKey = process.env.API_KEY;
 let geminiClient: GoogleGenAI | null = null;
@@ -9,89 +9,166 @@ if (apiKey) {
   geminiClient = new GoogleGenAI({ apiKey });
 }
 
+// Interface for dispatching actions back to the App
+interface Dispatchers {
+    updateDevice: (id: string, updates: Partial<SmartDevice>) => void;
+    updateRobot: (id: string, updates: Partial<SmartRobot>) => void;
+}
+
 // Local Rule Engine (Offline/Fallback)
 const localRuleEngine = (
     devices: SmartDevice[], 
-    robots: SmartRobot[], // Added Robots context
+    robots: SmartRobot[], 
     query: string, 
     lang: 'en' | 'zh' = 'en', 
-    aiName: string = 'Assistant'
+    aiName: string = 'Assistant',
+    isRBot: boolean = false,
+    dispatch?: Dispatchers
 ): string => {
   const lowerQuery = query.toLowerCase();
   const lowerName = aiName.toLowerCase();
 
-  // Wake Word / Persona Check
+  // R-Bot Physical Persona
+  if (isRBot) {
+     const bot = robots[0];
+     const location = bot ? bot.location : 'Station';
+     
+     if (lowerQuery.includes('light') && (lowerQuery.includes('off') || lowerQuery.includes('关'))) {
+         // ACTION: Turn off lights
+         if (dispatch) {
+             const lights = devices.filter(d => d.type === DeviceType.LIGHT);
+             lights.forEach(l => dispatch.updateDevice(l.id, { isOn: false }));
+         }
+         return lang === 'zh' 
+          ? `收到。R-Bot 正在前往开关位置关闭灯光。已执行物理操作。`
+          : `Affirmative. Navigating to light switch... Actuator engaged. Lights extinguished.`;
+     }
+     if (lowerQuery.includes('light') && (lowerQuery.includes('on') || lowerQuery.includes('开'))) {
+         // ACTION: Turn on lights
+         if (dispatch) {
+             const lights = devices.filter(d => d.type === DeviceType.LIGHT);
+             lights.forEach(l => dispatch.updateDevice(l.id, { isOn: true }));
+         }
+         return lang === 'zh' 
+          ? `收到。R-Bot 正在开启灯光。`
+          : `Affirmative. Lights activated.`;
+     }
+
+     if (lowerQuery.includes('curtain') || lowerQuery.includes('blind') || lowerQuery.includes('window') || lowerQuery.includes('窗帘')) {
+         const isOpening = lowerQuery.includes('open') || lowerQuery.includes('开');
+         const action = isOpening ? (lang === 'zh' ? '开启' : 'OPEN') : (lang === 'zh' ? '关闭' : 'CLOSE');
+         
+         if (dispatch) {
+             const curtains = devices.filter(d => d.type === DeviceType.CURTAIN);
+             curtains.forEach(c => dispatch.updateDevice(c.id, { isOn: isOpening }));
+         }
+
+         return lang === 'zh'
+           ? `R-Bot 已移动到窗边。机械臂正在${action}窗帘。任务完成。`
+           : `R-Bot relocating to window area... Manipulator arm active. Curtains ${action} sequence complete.`;
+     }
+     if (lowerQuery.includes('status') || lowerQuery.includes('where') || lowerQuery.includes('状态')) {
+         return lang === 'zh' 
+            ? `所有系统正常。当前位于 ${location}。等待指令。`
+            : `All systems nominal. Current vector: ${location}. Awaiting directives.`;
+     }
+     return lang === 'zh' 
+        ? `R-Bot 在线。我可以帮您物理操作家电（开关灯、窗帘）或执行巡逻。` 
+        : `R-Bot online. Capable of physical interactions (Lights, Curtains) and patrol duties.`;
+  }
+
+  // Standard AI / Wake Word Check
   if (lowerQuery.includes(lowerName)) {
       return lang === 'zh' 
         ? `${aiName} 在此。随时为您服务。` 
         : `${aiName} is here. Ready for commands.`;
   }
   
-  // Robot / R-Bot Commands
+  // Robot Control Commands (for non-RBot providers)
   if (lowerQuery.includes('robot') || lowerQuery.includes('bot') || lowerQuery.includes('vacuum') || lowerQuery.includes('clean') || lowerQuery.includes('扫地') || lowerQuery.includes('机器人')) {
-      const bot = robots[0]; // Assuming single robot for now
+      const bot = robots[0]; 
       if (!bot) return lang === 'zh' ? "没有找到机器人设备。" : "No robot device found.";
 
       if (lowerQuery.includes('start') || lowerQuery.includes('clean') || lowerQuery.includes('开始') || lowerQuery.includes('清扫')) {
+          if (dispatch) {
+              dispatch.updateRobot(bot.id, { mode: RobotMode.CLEANING, status: RobotStatus.WORKING });
+          }
           return lang === 'zh'
             ? `指令已发送：${bot.name} 开始清扫模式。`
             : `Command sent: ${bot.name} initiated CLEANING protocol.`;
       }
       if (lowerQuery.includes('dock') || lowerQuery.includes('charge') || lowerQuery.includes('home') || lowerQuery.includes('回充') || lowerQuery.includes('充电')) {
+          if (dispatch) {
+              dispatch.updateRobot(bot.id, { mode: RobotMode.DOCKING, status: RobotStatus.CHARGING });
+          }
           return lang === 'zh'
             ? `指令已发送：${bot.name} 正在返回充电座。`
             : `Command sent: ${bot.name} returning to dock.`;
       }
       if (lowerQuery.includes('patrol') || lowerQuery.includes('巡逻')) {
+          if (dispatch) {
+              dispatch.updateRobot(bot.id, { mode: RobotMode.PATROL, status: RobotStatus.WORKING });
+          }
           return lang === 'zh'
             ? `安全警报：${bot.name} 已切换至巡逻模式。`
             : `Security Alert: ${bot.name} switched to PATROL mode.`;
       }
-      if (lowerQuery.includes('where') || lowerQuery.includes('status') || lowerQuery.includes('在哪') || lowerQuery.includes('状态')) {
-          return lang === 'zh'
-            ? `${bot.name} 当前位于 ${bot.location}，电量 ${bot.battery}%，状态：${bot.status}。`
-            : `${bot.name} is currently in ${bot.location}. Battery: ${bot.battery}%. Status: ${bot.status}.`;
+  }
+
+  // Curtain Control Logic
+  if (lowerQuery.includes('curtain') || lowerQuery.includes('blind') || lowerQuery.includes('窗帘')) {
+      const isOpening = lowerQuery.includes('open') || lowerQuery.includes('开');
+      
+      if (dispatch) {
+          const curtains = devices.filter(d => d.type === DeviceType.CURTAIN);
+          curtains.forEach(c => dispatch.updateDevice(c.id, { isOn: isOpening }));
+      }
+      
+      if (isOpening) {
+          return lang === 'zh' ? "已为您打开客厅窗帘。" : "Opening Living Room curtains now.";
+      }
+      if (lowerQuery.includes('close') || lowerQuery.includes('关')) {
+          return lang === 'zh' ? "已为您关闭客厅窗帘。" : "Closing Living Room curtains now.";
       }
   }
 
-  // Chinese Logic
-  if (lang === 'zh' || /[\u4e00-\u9fa5]/.test(query)) {
-     if (lowerQuery.includes('状态') || lowerQuery.includes('在线')) {
-        const onlineCount = devices.filter(d => d.status === 'ONLINE').length;
-        return `系统状态: ${onlineCount} / ${devices.length} 个设备在线。`;
-     }
-     if (lowerQuery.includes('温度') || lowerQuery.includes('多少度')) {
-        const thermo = devices.find(d => d.type === DeviceType.THERMOSTAT);
-        if (thermo && thermo.value) {
-            return `当前室温为 ${thermo.value}${thermo.unit}。设备功耗 ${thermo.energyUsageWatts}W。`;
-        }
-        return "暂时无法获取温度传感器数据。";
-     }
-     if (lowerQuery.includes('打开') || lowerQuery.includes('关闭') || lowerQuery.includes('开灯')) {
-         return "指令已确认。正在通过边缘节点下发控制命令...";
-     }
-     return `我现在处于本地离线模式。您可以叫我 "${aiName}"。请检查网络连接以使用高级AI功能。`;
+  // General Device Control (Lights/Power)
+  if (lowerQuery.includes('light') || lowerQuery.includes('turn on') || lowerQuery.includes('off') || lowerQuery.includes('开灯') || lowerQuery.includes('关灯')) {
+    const isTurningOn = lowerQuery.includes('turn on') || lowerQuery.includes('开灯');
+    
+    if (dispatch) {
+        // Simple logic: Turn all lights on or off based on command
+        // In a real app, we would parse "Living Room Lights" specifically
+        const lights = devices.filter(d => d.type === DeviceType.LIGHT);
+        lights.forEach(l => dispatch.updateDevice(l.id, { isOn: isTurningOn }));
+    }
+
+    return lang === 'zh' 
+        ? "指令已确认。正在通过边缘节点下发控制命令..." 
+        : "Acknowledged. Local command dispatched to Edge Core via MQTT. State updating...";
   }
 
-  // English Logic
-  if (lowerQuery.includes('status') || lowerQuery.includes('online')) {
+  // Status Queries
+  if (lowerQuery.includes('status') || lowerQuery.includes('online') || lowerQuery.includes('在线')) {
     const onlineCount = devices.filter(d => d.status === 'ONLINE').length;
-    return `System Status: ${onlineCount} of ${devices.length} nodes are currently online and synced.`;
+    return lang === 'zh'
+        ? `系统状态: ${onlineCount} / ${devices.length} 个设备在线。`
+        : `System Status: ${onlineCount} of ${devices.length} nodes are currently online.`;
   }
 
-  if (lowerQuery.includes('temperature') || lowerQuery.includes('hot') || lowerQuery.includes('cold')) {
+  // Thermostat Queries
+  if (lowerQuery.includes('temperature') || lowerQuery.includes('hot') || lowerQuery.includes('cold') || lowerQuery.includes('温度')) {
     const thermo = devices.find(d => d.type === DeviceType.THERMOSTAT);
     if (thermo && thermo.value) {
-      return `The current reading is ${thermo.value}${thermo.unit}. Usage is ${thermo.energyUsageWatts}W.`;
+      return lang === 'zh'
+         ? `当前室温为 ${thermo.value}${thermo.unit}。设备功耗 ${thermo.energyUsageWatts}W。`
+         : `The current reading is ${thermo.value}${thermo.unit}. Usage is ${thermo.energyUsageWatts}W.`;
     }
-    return "I cannot read the temperature sensors at the moment.";
   }
 
-  if (lowerQuery.includes('light') || lowerQuery.includes('turn on') || lowerQuery.includes('off')) {
-    return "Acknowledged. Local command dispatched to Edge Core via MQTT. State updating...";
-  }
-
-  return `I am currently in Local Mode. You can address me as "${aiName}". Ensure internet connectivity for advanced analysis.`;
+  return lang === 'zh'
+     ? `我现在处于本地模式。您可以叫我 "${aiName}"。`
+     : `I am currently in Local Mode. You can address me as "${aiName}".`;
 };
 
 // Main Handler
@@ -100,88 +177,80 @@ export const getSmartHomeResponse = async (
   devices: SmartDevice[],
   userQuery: string,
   aiName: string = 'Assistant',
-  robots: SmartRobot[] = [] // Added robots to signature
+  robots: SmartRobot[] = [],
+  dispatch?: Dispatchers
 ): Promise<string> => {
   
   // Detect Language
   const isChinese = /[\u4e00-\u9fa5]/.test(userQuery);
+  const lang = isChinese ? 'zh' : 'en';
 
-  // 1. Handle Gemini
+  // 1. R-Bot (Physical Robot Agent)
+  if (provider === 'RBOT') {
+      return new Promise(resolve => {
+          setTimeout(() => {
+              resolve(localRuleEngine(devices, robots, userQuery, lang, aiName, true, dispatch));
+          }, 600);
+      });
+  }
+
+  // 2. Google Gemini
   if (provider === 'GEMINI') {
-      if (!geminiClient) return localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
+      if (!geminiClient) return localRuleEngine(devices, robots, userQuery, lang, aiName, false, dispatch);
       try {
         const deviceContext = JSON.stringify(devices.map(d => ({
             name: d.name, type: d.type, status: d.isOn ? 'ON' : 'OFF', value: d.value
         })));
-        const robotContext = JSON.stringify(robots.map(r => ({
-            name: r.name, mode: r.mode, battery: r.battery, location: r.location
-        })));
         
         const systemPrompt = isChinese 
-            ? `你是智能家居助手，你的名字是"${aiName}"。如果用户问机器人，请根据Context回复。保持回答简短。` 
-            : `You are a smart home assistant named "${aiName}". Can control robots and devices. Keep answers brief.`;
+            ? `你是智能家居助手"${aiName}"。` 
+            : `You are a smart home assistant named "${aiName}".`;
 
         const response = await geminiClient.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Context: Devices: ${deviceContext}. Robots: ${robotContext}. User Query: ${userQuery}`,
+            contents: `Context: Devices: ${deviceContext}. Query: ${userQuery}`,
             config: { systemInstruction: systemPrompt }
         });
+        
+        // Still run local engine to check for physical commands that Gemini might just describe
+        localRuleEngine(devices, robots, userQuery, lang, aiName, false, dispatch);
+
         return response.text || (isChinese ? "无法连接云端。" : "Cloud connection failed.");
       } catch (e) {
-          return localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
+          return localRuleEngine(devices, robots, userQuery, lang, aiName, false, dispatch);
       }
   }
 
-  // 2. Handle Domestic AIs (DeepSeek, Qwen, Doubao) Simulation
+  // 3. Other Providers (OpenAI, DeepSeek, etc.) Simulation
   return new Promise((resolve) => {
     setTimeout(() => {
         const lowerQuery = userQuery.toLowerCase();
-        const lowerName = aiName.toLowerCase();
-
-        // Check for Name Call (Local Simulation for API providers)
-        if (lowerQuery.includes(lowerName)) {
-            resolve(isChinese 
-               ? `[${provider}] ${aiName} 随时为您效劳！` 
-               : `[${provider}] ${aiName} at your service!`);
-            return;
-        }
-
-        // Specific handling for Robot in Domestic AI simulation
-        if (lowerQuery.includes('robot') || lowerQuery.includes('clean') || lowerQuery.includes('机器人')) {
-            // Force use local rule engine logic for Robot control simulation but wrapped in provider tag
-            const botResp = localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
-            resolve(`[${provider}] ${botResp}`);
-            return;
-        }
-
-        if (lowerQuery.includes('打开') || lowerQuery.includes('turn on')) {
-            resolve(isChinese 
-                ? `[${provider}] 指令已接收。正在调用 Edge API 开启设备...` 
-                : `[${provider}] Command received. Invoking Edge API to turn on device...`);
-            return;
-        }
-
-        if (lowerQuery.includes('推荐') || lowerQuery.includes('建议') || lowerQuery.includes('suggest')) {
-             if (provider === 'DEEPSEEK') {
+        
+        // Handle physical control requests via other AIs
+        if (lowerQuery.includes('turn on') || lowerQuery.includes('open') || lowerQuery.includes('打开') || lowerQuery.includes('curtain') || lowerQuery.includes('clean') || lowerQuery.includes('扫地')) {
+             const actionResp = localRuleEngine(devices, robots, userQuery, lang, aiName, false, dispatch);
+             
+             if (provider === 'OPENAI') {
                  resolve(isChinese 
-                    ? `DeepSeek V3: ${aiName} 建议您：根据您的使用习惯，在晚间开启“夜间模式”可省电 15%。` 
-                    : `DeepSeek V3: ${aiName} suggests enabling 'Night Mode' to save 15% energy.`);
-             } else if (provider === 'QWEN') {
-                 resolve(isChinese
-                    ? `通义千问: ${aiName} 已分析数据，建议检查客厅空调温控设置。`
-                    : `Qwen: ${aiName} analyzed data. Please check living room thermostat.`);
+                     ? `ChatGPT: 好的，${actionResp}` 
+                     : `ChatGPT: Certainly. ${actionResp}`);
              } else {
-                 resolve(isChinese
-                    ? `豆包: ${aiName} 为您推荐‘回家模式’。`
-                    : `Doubao: ${aiName} recommends 'Welcome Home' scene.`);
+                 resolve(`[${provider}] ${actionResp}`);
              }
              return;
         }
 
-        // Fallback to local logic but wrapped in provider signature
-        const localResp = localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
-        resolve(`[${provider} Proxy] ${localResp}`);
+        // General Conversation Fallback
+        const baseResp = localRuleEngine(devices, robots, userQuery, lang, aiName, false, dispatch);
+        
+        let prefix = `[${provider}]`;
+        if (provider === 'OPENAI') prefix = 'ChatGPT:';
+        if (provider === 'DEEPSEEK') prefix = 'DeepSeek:';
+        if (provider === 'QWEN') prefix = 'Qwen:';
+        if (provider === 'DOUBAO') prefix = 'Doubao:';
 
-    }, 800); // Simulate network latency
+        resolve(`${prefix} ${baseResp}`);
+
+    }, 800);
   });
 };
