@@ -13,7 +13,8 @@ import {
   Wifi,
   Home,
   BoxSelect,
-  Key as KeyIcon
+  Key as KeyIcon,
+  Bot
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -32,7 +33,8 @@ import DigitalKeyCard from './components/DigitalKeyCard';
 import SecurityModal from './components/SecurityModal';
 import PaymentQRModal from './components/PaymentQRModal';
 import Sidebar from './components/Sidebar';
-import { SmartDevice, DeviceType, ConnectionStatus, Scene, Automation, DigitalKey, KeyType } from './types';
+import RobotControl from './components/RobotControl';
+import { SmartDevice, DeviceType, ConnectionStatus, Scene, Automation, DigitalKey, KeyType, SmartRobot, RobotMode, RobotStatus } from './types';
 import { getEnv } from './utils/env';
 
 // Mock Data Generators
@@ -212,11 +214,25 @@ const initialKeys: DigitalKey[] = [
   }
 ];
 
+const initialRobots: SmartRobot[] = [
+  {
+    id: 'r1',
+    name: 'R-Bot 01',
+    battery: 88,
+    mode: RobotMode.IDLE,
+    status: RobotStatus.WORKING,
+    location: 'Docking Station',
+    binFullness: 12
+  }
+];
+
 const App: React.FC = () => {
   const [devices, setDevices] = useState<SmartDevice[]>(initialDevices);
   const [scenes, setScenes] = useState<Scene[]>(initialScenes);
   const [automations, setAutomations] = useState<Automation[]>(initialAutomations);
   const [keys, setKeys] = useState<DigitalKey[]>(initialKeys);
+  const [robots, setRobots] = useState<SmartRobot[]>(initialRobots);
+  
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [energyData, setEnergyData] = useState(generateHistoryData());
   const [activeTab, setActiveTab] = useState('home');
@@ -245,6 +261,18 @@ const App: React.FC = () => {
         }
         return { ...d, energyUsageWatts: newPower, value: newValue };
       }));
+
+      // Robot Simulation
+      setRobots(prev => prev.map(bot => {
+         if (bot.mode === RobotMode.CLEANING) {
+             return { ...bot, battery: Math.max(0, bot.battery - 1), binFullness: Math.min(100, bot.binFullness + 1) };
+         }
+         if (bot.mode === RobotMode.DOCKING && bot.battery < 100) {
+             return { ...bot, battery: bot.battery + 2 };
+         }
+         return bot;
+      }));
+
     }, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -310,6 +338,10 @@ const App: React.FC = () => {
       energyUsageWatts: 5
     };
     setDevices(prev => [...prev, newDevice]);
+  };
+
+  const handleRobotUpdate = (updates: Partial<SmartRobot>) => {
+      setRobots(prev => prev.map(r => r.id === 'r1' ? { ...r, ...updates } : r));
   };
 
   // Group devices by Location
@@ -480,6 +512,11 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Robot Control Tab */}
+        {activeTab === 'robots' && (
+           <RobotControl robot={robots[0]} onUpdate={handleRobotUpdate} />
+        )}
+
         {activeTab === 'automations' && (
           <div className="grid md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="glass-panel p-6 rounded-2xl border border-slate-800">
@@ -539,7 +576,7 @@ const App: React.FC = () => {
         cardNumber={selectedPaymentKey?.cardNumber}
       />
 
-      {/* New AI Assistant with Voice */}
+      {/* New AI Assistant with Voice and Robot Support */}
       <SmartAssistant devices={devices} />
 
       {/* Mobile Bottom Nav */}
@@ -547,7 +584,7 @@ const App: React.FC = () => {
         <div className="flex justify-around items-center h-20">
           {[
             { id: 'home', icon: Home, label: 'Home' },
-            { id: 'automations', icon: BoxSelect, label: 'Auto' },
+            { id: 'robots', icon: Bot, label: 'Bot' },
             { id: 'keys', icon: KeyIcon, label: 'Wallet' }
           ].map((item) => (
             <button 

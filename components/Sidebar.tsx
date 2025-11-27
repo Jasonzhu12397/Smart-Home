@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Cpu, LayoutDashboard, Workflow, Key, Settings, Server, Activity, FileText } from 'lucide-react';
+import { Cpu, LayoutDashboard, Workflow, Key, Settings, Server, Activity, FileText, Bot } from 'lucide-react';
 
 interface SidebarProps {
   mode: 'CLIENT' | 'ADMIN';
@@ -11,6 +12,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mode, activeTab, onTabChange }) => {
   
   const clientMenu = [
     { id: 'home', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'robots', icon: Bot, label: 'Robots' },
     { id: 'automations', icon: Workflow, label: 'Automations' },
     { id: 'keys', icon: Key, label: 'Wallet & Keys' },
   ];

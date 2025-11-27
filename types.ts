@@ -90,6 +90,32 @@ export interface DigitalKey {
   capabilities: ('UNLOCK' | 'TRUNK' | 'CLIMATE' | 'SHARE' | 'RECHARGE' | 'HISTORY' | 'PAYMENT')[];
 }
 
+// Robot Types
+export enum RobotMode {
+  IDLE = 'IDLE',
+  CLEANING = 'CLEANING',
+  DOCKING = 'DOCKING',
+  PATROL = 'PATROL'
+}
+
+export enum RobotStatus {
+  CHARGING = 'CHARGING',
+  WORKING = 'WORKING',
+  STUCK = 'STUCK',
+  OFFLINE = 'OFFLINE'
+}
+
+export interface SmartRobot {
+  id: string;
+  name: string;
+  battery: number;
+  mode: RobotMode;
+  status: RobotStatus;
+  location: string; // e.g., "Living Room"
+  binFullness: number; // 0-100
+  cameraUrl?: string; // Simulated FPV feed
+}
+
 // Admin / Server Side Types
 export interface NodeStatus {
   name: string;

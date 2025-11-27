@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { SmartDevice, DeviceType, AIProvider } from "../types";
+import { SmartDevice, DeviceType, AIProvider, SmartRobot, RobotMode } from "../types";
 
 const apiKey = process.env.API_KEY;
 let geminiClient: GoogleGenAI | null = null;
@@ -10,7 +10,13 @@ if (apiKey) {
 }
 
 // Local Rule Engine (Offline/Fallback)
-const localRuleEngine = (devices: SmartDevice[], query: string, lang: 'en' | 'zh' = 'en', aiName: string = 'Assistant'): string => {
+const localRuleEngine = (
+    devices: SmartDevice[], 
+    robots: SmartRobot[], // Added Robots context
+    query: string, 
+    lang: 'en' | 'zh' = 'en', 
+    aiName: string = 'Assistant'
+): string => {
   const lowerQuery = query.toLowerCase();
   const lowerName = aiName.toLowerCase();
 
@@ -21,6 +27,33 @@ const localRuleEngine = (devices: SmartDevice[], query: string, lang: 'en' | 'zh
         : `${aiName} is here. Ready for commands.`;
   }
   
+  // Robot / R-Bot Commands
+  if (lowerQuery.includes('robot') || lowerQuery.includes('bot') || lowerQuery.includes('vacuum') || lowerQuery.includes('clean') || lowerQuery.includes('扫地') || lowerQuery.includes('机器人')) {
+      const bot = robots[0]; // Assuming single robot for now
+      if (!bot) return lang === 'zh' ? "没有找到机器人设备。" : "No robot device found.";
+
+      if (lowerQuery.includes('start') || lowerQuery.includes('clean') || lowerQuery.includes('开始') || lowerQuery.includes('清扫')) {
+          return lang === 'zh'
+            ? `指令已发送：${bot.name} 开始清扫模式。`
+            : `Command sent: ${bot.name} initiated CLEANING protocol.`;
+      }
+      if (lowerQuery.includes('dock') || lowerQuery.includes('charge') || lowerQuery.includes('home') || lowerQuery.includes('回充') || lowerQuery.includes('充电')) {
+          return lang === 'zh'
+            ? `指令已发送：${bot.name} 正在返回充电座。`
+            : `Command sent: ${bot.name} returning to dock.`;
+      }
+      if (lowerQuery.includes('patrol') || lowerQuery.includes('巡逻')) {
+          return lang === 'zh'
+            ? `安全警报：${bot.name} 已切换至巡逻模式。`
+            : `Security Alert: ${bot.name} switched to PATROL mode.`;
+      }
+      if (lowerQuery.includes('where') || lowerQuery.includes('status') || lowerQuery.includes('在哪') || lowerQuery.includes('状态')) {
+          return lang === 'zh'
+            ? `${bot.name} 当前位于 ${bot.location}，电量 ${bot.battery}%，状态：${bot.status}。`
+            : `${bot.name} is currently in ${bot.location}. Battery: ${bot.battery}%. Status: ${bot.status}.`;
+      }
+  }
+
   // Chinese Logic
   if (lang === 'zh' || /[\u4e00-\u9fa5]/.test(query)) {
      if (lowerQuery.includes('状态') || lowerQuery.includes('在线')) {
@@ -66,7 +99,8 @@ export const getSmartHomeResponse = async (
   provider: AIProvider,
   devices: SmartDevice[],
   userQuery: string,
-  aiName: string = 'Assistant'
+  aiName: string = 'Assistant',
+  robots: SmartRobot[] = [] // Added robots to signature
 ): Promise<string> => {
   
   // Detect Language
@@ -74,24 +108,27 @@ export const getSmartHomeResponse = async (
 
   // 1. Handle Gemini
   if (provider === 'GEMINI') {
-      if (!geminiClient) return localRuleEngine(devices, userQuery, isChinese ? 'zh' : 'en', aiName);
+      if (!geminiClient) return localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
       try {
         const deviceContext = JSON.stringify(devices.map(d => ({
             name: d.name, type: d.type, status: d.isOn ? 'ON' : 'OFF', value: d.value
         })));
+        const robotContext = JSON.stringify(robots.map(r => ({
+            name: r.name, mode: r.mode, battery: r.battery, location: r.location
+        })));
         
         const systemPrompt = isChinese 
-            ? `你是智能家居助手，你的名字是"${aiName}"。如果用户叫你的名字，请热情回应。保持回答简短。` 
-            : `You are a smart home assistant named "${aiName}". If the user calls your name, respond enthusiastically. Keep answers brief.`;
+            ? `你是智能家居助手，你的名字是"${aiName}"。如果用户问机器人，请根据Context回复。保持回答简短。` 
+            : `You are a smart home assistant named "${aiName}". Can control robots and devices. Keep answers brief.`;
 
         const response = await geminiClient.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Context: Smart Home IoT. Devices: ${deviceContext}. User Query: ${userQuery}`,
+            contents: `Context: Devices: ${deviceContext}. Robots: ${robotContext}. User Query: ${userQuery}`,
             config: { systemInstruction: systemPrompt }
         });
         return response.text || (isChinese ? "无法连接云端。" : "Cloud connection failed.");
       } catch (e) {
-          return localRuleEngine(devices, userQuery, isChinese ? 'zh' : 'en', aiName);
+          return localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
       }
   }
 
@@ -106,6 +143,14 @@ export const getSmartHomeResponse = async (
             resolve(isChinese 
                ? `[${provider}] ${aiName} 随时为您效劳！` 
                : `[${provider}] ${aiName} at your service!`);
+            return;
+        }
+
+        // Specific handling for Robot in Domestic AI simulation
+        if (lowerQuery.includes('robot') || lowerQuery.includes('clean') || lowerQuery.includes('机器人')) {
+            // Force use local rule engine logic for Robot control simulation but wrapped in provider tag
+            const botResp = localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
+            resolve(`[${provider}] ${botResp}`);
             return;
         }
 
@@ -134,7 +179,7 @@ export const getSmartHomeResponse = async (
         }
 
         // Fallback to local logic but wrapped in provider signature
-        const localResp = localRuleEngine(devices, userQuery, isChinese ? 'zh' : 'en', aiName);
+        const localResp = localRuleEngine(devices, robots, userQuery, isChinese ? 'zh' : 'en', aiName);
         resolve(`[${provider} Proxy] ${localResp}`);
 
     }, 800); // Simulate network latency
